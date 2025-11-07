@@ -1,6 +1,6 @@
 'use client';
 import React, { useState, useEffect, useRef } from 'react';
-import { Upload, Download, Send, Plus, Trash2, Settings, MessageSquare, Copy, Check, Brain, Search, HardDrive, Users, Bot, UserCheck } from 'lucide-react';
+import { Upload, Download, Send, Plus, Trash2, Settings, MessageSquare, Copy, Check, Brain, HardDrive, Users, Bot, UserCheck } from 'lucide-react';
 
 const MultiAIConversationManager = () => {
   const [conversations, setConversations] = useState([]);
@@ -54,6 +54,7 @@ const MultiAIConversationManager = () => {
     loadApiKeys();
     loadMemoryConfig();
     loadAIMemories();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Save conversations to localStorage whenever they change
@@ -77,6 +78,7 @@ const MultiAIConversationManager = () => {
   useEffect(() => {
     localStorage.setItem('multi-ai-memories', JSON.stringify(aiMemories));
     updateMemoryStats();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aiMemories]);
 
   // 📥 DATA LOADING FUNCTIONS
@@ -208,6 +210,7 @@ const MultiAIConversationManager = () => {
     console.log(`🗑️ Memory deleted for ${aiId}:`, memoryId);
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const clearAllMemoriesForAI = (aiId) => {
     const updatedAIMemories = {
       ...aiMemories,
@@ -395,8 +398,7 @@ const MultiAIConversationManager = () => {
         setCurrentAutoRound(prev => prev + 1);
         setTimeout(() => {
           // Trigger next round with the last AI response
-          const lastResponse = allResponses[allResponses.length - 1];
-          setMessage(getAutoProgressPrompt(lastResponse.content));
+          setMessage(getAutoProgressPrompt());
           // Will trigger another sendMessage cycle
         }, 2000);
       }
@@ -429,12 +431,9 @@ const MultiAIConversationManager = () => {
     }
 
     const hasMemoryContext = relevantMemories.length > 0;
-    const memoryInfo = hasMemoryContext ? 
-      ` (enhanced with ${relevantMemories.length} relevant memories)` : 
-      '';
-    
-    const contextWithMemories = hasMemoryContext ? 
-      `[RELEVANT CONTEXT FROM PREVIOUS CONVERSATIONS]: ${relevantMemories.map(m => m.content).join(' | ')}\n\n[USER MESSAGE]: ${contextMessage}` : 
+
+    const contextWithMemories = hasMemoryContext ?
+      `[RELEVANT CONTEXT FROM PREVIOUS CONVERSATIONS]: ${relevantMemories.map(m => m.content).join(' | ')}\n\n[USER MESSAGE]: ${contextMessage}` :
       contextMessage;
 
     try {
@@ -592,7 +591,7 @@ const MultiAIConversationManager = () => {
     return callAnthropic(messages, contextMessage);
   };
 
-  const getAutoProgressPrompt = (lastResponse) => {
+  const getAutoProgressPrompt = () => {
     const prompts = [
       "What are your thoughts on that perspective?",
       "Can you elaborate on that point?",
@@ -961,7 +960,7 @@ const MultiAIConversationManager = () => {
               </select>
             </div>
             <div className="space-y-2">
-              {(aiMemories[selectedMemoryAI] || []).slice(0, 10).map((memory, index) => (
+              {(aiMemories[selectedMemoryAI] || []).slice(0, 10).map((memory) => (
                 <div key={memory.id} className="p-2 bg-white border border-blue-200 rounded text-xs">
                   <div className="text-gray-800 font-medium">{memory.content.substring(0, 60)}...</div>
                   <div className="flex items-center justify-between mt-1">
