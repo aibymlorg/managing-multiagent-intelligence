@@ -47,6 +47,7 @@ const MultiAIConversationManager = () => {
     openai: '',
     anthropic: '',
     ollama: 'http://localhost:11434',
+    ollamaCloud: '',
     gemini: '',
     claude: ''
   });
@@ -75,6 +76,7 @@ const MultiAIConversationManager = () => {
     openai: { name: 'OpenAI GPT', color: 'bg-green-500', icon: '🤖' },
     anthropic: { name: 'Claude (Anthropic)', color: 'bg-orange-500', icon: '🧠' },
     ollama: { name: 'Ollama (Local)', color: 'bg-blue-500', icon: '🏠' },
+    ollamaCloud: { name: 'Ollama Cloud', color: 'bg-cyan-500', icon: '☁️' },
     gemini: { name: 'Google Gemini', color: 'bg-red-500', icon: '💎' },
     claude: { name: 'Claude API', color: 'bg-purple-500', icon: '🎭' }
   };
@@ -130,10 +132,11 @@ const MultiAIConversationManager = () => {
       openai: process.env.NEXT_PUBLIC_OPENAI_API_KEY || '',
       anthropic: process.env.NEXT_PUBLIC_ANTHROPIC_API_KEY || '',
       ollama: 'http://localhost:11434',
+      ollamaCloud: process.env.NEXT_PUBLIC_OLLAMA_URL || 'https://api.ollama.ai',
       gemini: process.env.NEXT_PUBLIC_GEMINI_API_KEY || '',
       claude: process.env.NEXT_PUBLIC_ANTHROPIC_API_KEY || ''
     };
-    
+
     if (storedKeys) {
       setApiKeys({ ...defaultKeys, ...JSON.parse(storedKeys) });
     } else {
@@ -564,6 +567,9 @@ const MultiAIConversationManager = () => {
         case 'ollama':
           response = await callOllama(messages, contextWithMemories);
           break;
+        case 'ollamaCloud':
+          response = await callOllamaCloud(messages, contextWithMemories);
+          break;
         case 'gemini':
           response = await callGemini(messages, contextWithMemories);
           break;
@@ -667,6 +673,33 @@ const MultiAIConversationManager = () => {
 
     if (!response.ok) {
       throw new Error(`Ollama API error: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    return data.message.content;
+  };
+
+  // Ollama Cloud API Implementation
+  const callOllamaCloud = async (messages: Message[], contextMessage: string) => {
+    const ollamaApiKey = process.env.NEXT_PUBLIC_OLLAMA_API_KEY || '';
+    const response = await fetch(`${apiKeys.ollamaCloud}/api/chat`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${ollamaApiKey}`
+      },
+      body: JSON.stringify({
+        model: 'llama2', // or your preferred Ollama Cloud model
+        messages: [
+          ...messages.slice(-10),
+          { role: 'user', content: contextMessage }
+        ],
+        stream: false
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`Ollama Cloud API error: ${response.statusText}`);
     }
 
     const data = await response.json();
