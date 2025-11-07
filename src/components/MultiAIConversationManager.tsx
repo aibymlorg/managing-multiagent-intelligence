@@ -12,6 +12,11 @@ interface Message {
   usedMemories?: number;
   memoryEnhanced?: boolean;
   isError?: boolean;
+  metadata?: {
+    respondingTo?: string;
+    round?: number;
+    [key: string]: unknown;
+  };
 }
 
 interface Conversation {
@@ -61,6 +66,8 @@ const MultiAIConversationManager = () => {
   const [autoProgressConversation, setAutoProgressConversation] = useState(false);
   const [maxAutoRounds, setMaxAutoRounds] = useState(5);
   const [currentAutoRound, setCurrentAutoRound] = useState(0);
+  const [discussionTopic, setDiscussionTopic] = useState('');
+  const [isAIDialogueMode, setIsAIDialogueMode] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Enhanced providers with more AI options
@@ -348,15 +355,94 @@ const MultiAIConversationManager = () => {
     }
   };
 
+  // 🤖 AI-TO-AI DIALOGUE MODE
+  const startAIDialogue = async () => {
+    if (!discussionTopic.trim() || !activeConversation) return;
+    if (activeConversation.type === 'single' || activeConversation.participants.length < 2) {
+      alert('AI Dialogue mode requires at least 2 AIs selected');
+      return;
+    }
+
+    setIsAIDialogueMode(true);
+    setIsLoading(true);
+
+    // Create initial topic message
+    const topicMessage: Message = {
+      role: 'user',
+      content: `Discussion Topic: ${discussionTopic}`,
+      timestamp: new Date().toISOString(),
+      sender: 'moderator'
+    };
+
+    const updatedMessages = [topicMessage];
+    const updatedConv = { ...activeConversation, messages: updatedMessages };
+    setActiveConversation(updatedConv);
+    setConversations(conversations.map(c => c.id === activeConversation.id ? updatedConv : c));
+
+    try {
+      let currentMessages = updatedMessages;
+      let currentAIIndex = 0;
+
+      // Run dialogue rounds
+      for (let round = 0; round < maxAutoRounds; round++) {
+        const currentAI = activeConversation.participants[currentAIIndex];
+        const nextAIIndex = (currentAIIndex + 1) % activeConversation.participants.length;
+        const nextAI = activeConversation.participants[nextAIIndex];
+
+        // Get the last message for context
+        const lastMessage = currentMessages[currentMessages.length - 1];
+        const contextMessage = round === 0
+          ? `You are ${providers[currentAI]?.name}. Please share your perspective on: ${discussionTopic}`
+          : `You are ${providers[currentAI]?.name} responding to ${providers[lastMessage.sender]?.name || lastMessage.sender}. Their message was: "${lastMessage.content}". Please provide your response.`;
+
+        // Get AI response
+        const response = await getAIResponseWithMemory(currentAI, currentMessages, contextMessage, []);
+        const aiMessage: Message = {
+          ...response,
+          metadata: {
+            respondingTo: lastMessage.sender,
+            round: round + 1
+          }
+        };
+
+        currentMessages = [...currentMessages, aiMessage];
+
+        // Update conversation in real-time
+        const dialogueConv = { ...activeConversation, messages: currentMessages };
+        setActiveConversation(dialogueConv);
+        setConversations(conversations.map(c => c.id === activeConversation.id ? dialogueConv : c));
+        setCurrentAutoRound(round + 1);
+
+        // Move to next AI
+        currentAIIndex = nextAIIndex;
+
+        // Add delay between responses
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+
+      setDiscussionTopic('');
+      console.log('✅ AI dialogue completed');
+
+    } catch (error: unknown) {
+      console.error('❌ Error in AI dialogue:', error);
+      const errorContent = error instanceof Error ? error.message : 'An unknown error occurred';
+      alert(`Failed to complete AI dialogue: ${errorContent}`);
+    } finally {
+      setIsLoading(false);
+      setIsAIDialogueMode(false);
+      setCurrentAutoRound(0);
+    }
+  };
+
   // 🚀 ENHANCED MESSAGE SENDING WITH MULTI-AI SUPPORT
   const sendMessage = async () => {
     if (!message.trim() || !activeConversation) return;
 
     console.log('📤 Sending message to', activeConversation.participants);
 
-    const userMessage = { 
-      role: 'user', 
-      content: message, 
+    const userMessage: Message = {
+      role: 'user',
+      content: message,
       timestamp: new Date().toISOString(),
       sender: 'user'
     };
@@ -836,31 +922,61 @@ const MultiAIConversationManager = () => {
             </button>
           </div>
 
-          {/* Auto-progression controls for multi-AI conversations */}
-          {conversationType !== 'single' && (
-            <div className="mb-4 p-2 bg-purple-50 border border-purple-200 rounded">
-              <label className="flex items-center gap-2 mb-2">
-                <input
-                  type="checkbox"
-                  checked={autoProgressConversation}
-                  onChange={(e) => setAutoProgressConversation(e.target.checked)}
+          {/* AI Dialogue Mode - Turn-based AI-to-AI conversation */}
+          {conversationType !== 'single' && selectedAIs.length >= 2 && (
+            <div className="mb-4 p-3 bg-gradient-to-r from-green-50 to-blue-50 border border-green-300 rounded">
+              <div className="flex items-center gap-2 mb-2">
+                <MessageSquare className="w-4 h-4 text-green-600" />
+                <span className="text-sm font-semibold text-green-700">🤖 AI Dialogue Mode</span>
+              </div>
+              <p className="text-xs text-gray-600 mb-2">Let AIs discuss a topic together</p>
+
+              <div className="mb-2">
+                <label className="block text-xs font-medium mb-1">Discussion Topic</label>
+                <textarea
+                  value={discussionTopic}
+                  onChange={(e) => setDiscussionTopic(e.target.value)}
+                  placeholder="e.g., What are the ethical implications of AI?"
+                  className="w-full p-2 text-sm border border-green-200 rounded resize-none"
+                  rows={2}
+                  disabled={isAIDialogueMode}
                 />
-                <span className="text-sm font-medium">Auto-progress conversation</span>
-              </label>
-              {autoProgressConversation && (
-                <div>
-                  <label className="block text-xs text-gray-600 mb-1">Max rounds: {maxAutoRounds}</label>
-                  <input
-                    type="range"
-                    min="3"
-                    max="10"
-                    value={maxAutoRounds}
-                    onChange={(e) => setMaxAutoRounds(parseInt(e.target.value))}
-                    className="w-full"
-                  />
-                  <div className="text-xs text-purple-600">Round: {currentAutoRound}/{maxAutoRounds}</div>
-                </div>
-              )}
+              </div>
+
+              <div className="mb-2">
+                <label className="block text-xs text-gray-600 mb-1">Dialogue rounds: {maxAutoRounds}</label>
+                <input
+                  type="range"
+                  min="2"
+                  max="10"
+                  value={maxAutoRounds}
+                  onChange={(e) => setMaxAutoRounds(parseInt(e.target.value))}
+                  className="w-full"
+                  disabled={isAIDialogueMode}
+                />
+              </div>
+
+              <button
+                onClick={startAIDialogue}
+                disabled={!discussionTopic.trim() || isAIDialogueMode || isLoading}
+                className="w-full py-2 px-3 bg-green-600 text-white text-sm font-medium rounded hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {isAIDialogueMode ? (
+                  <>
+                    <span className="animate-spin">⏳</span>
+                    Round {currentAutoRound}/{maxAutoRounds}
+                  </>
+                ) : (
+                  <>
+                    <Users className="w-4 h-4" />
+                    Start AI Dialogue
+                  </>
+                )}
+              </button>
+
+              <div className="mt-2 text-xs text-green-600">
+                {selectedAIs.length} AIs will take turns discussing
+              </div>
             </div>
           )}
 
@@ -1158,22 +1274,42 @@ const MultiAIConversationManager = () => {
             {/* Messages */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
               {activeConversation.messages.map((msg, index) => (
-                <div key={index} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                <div key={index} className={`flex ${msg.sender === 'user' ? 'justify-end' : msg.sender === 'moderator' ? 'justify-center' : 'justify-start'}`}>
                   <div className={`max-w-3xl p-3 rounded-lg ${
-                    msg.role === 'user' 
-                      ? 'bg-blue-500 text-white' 
-                      : msg.isError 
+                    msg.sender === 'user'
+                      ? 'bg-blue-500 text-white'
+                      : msg.sender === 'moderator'
+                        ? 'bg-yellow-100 text-yellow-900 border-2 border-yellow-400 font-semibold'
+                      : msg.isError
                         ? 'bg-red-100 text-red-800 border border-red-200'
                         : msg.memoryEnhanced
                           ? 'bg-blue-100 text-blue-800 border border-blue-200'
-                          : 'bg-gray-100 text-gray-800'
+                          : msg.metadata?.respondingTo
+                            ? 'bg-green-50 text-green-900 border-2 border-green-300'
+                            : 'bg-gray-100 text-gray-800'
                   }`}>
-                    {msg.role === 'assistant' && (
+                    {msg.sender === 'moderator' && (
+                      <div className="flex items-center justify-center gap-2 mb-2">
+                        <MessageSquare className="w-4 h-4 text-yellow-600" />
+                        <span className="text-sm font-bold">Discussion Topic</span>
+                      </div>
+                    )}
+                    {msg.role === 'assistant' && msg.sender !== 'moderator' && (
                       <div className="flex items-center gap-2 mb-2">
                         <span className={`w-3 h-3 rounded-full ${providers[msg.sender]?.color || 'bg-gray-400'}`}></span>
                         <span className="text-xs font-medium opacity-70">
                           {providers[msg.sender]?.name || msg.sender}
                         </span>
+                        {msg.metadata?.respondingTo && msg.metadata.respondingTo !== 'moderator' && (
+                          <span className="flex items-center gap-1 text-xs text-green-700 font-medium">
+                            → responding to {providers[msg.metadata.respondingTo]?.name || msg.metadata.respondingTo}
+                          </span>
+                        )}
+                        {msg.metadata?.round && (
+                          <span className="text-xs text-gray-500">
+                            (Round {msg.metadata.round})
+                          </span>
+                        )}
                         {msg.usedMemories && msg.usedMemories > 0 && (
                           <span className="flex items-center gap-1 text-xs opacity-70">
                             <Brain className="w-3 h-3" />
