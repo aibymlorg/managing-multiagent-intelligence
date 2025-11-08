@@ -434,7 +434,7 @@ const MultiAIConversationManager = () => {
       const aiStats: Record<string, { count: number; totalTime: number; avgTime: number; minTime: number; maxTime: number }> = {};
 
       aiMessages.forEach(msg => {
-        const responseTime = msg.metadata?.responseTime || 0;
+        const responseTime = (msg.metadata?.responseTime as number) || 0;
         const aiId = msg.sender;
 
         if (!aiStats[aiId]) {
@@ -458,7 +458,7 @@ const MultiAIConversationManager = () => {
         aiStats[aiId].avgTime = Math.round(aiStats[aiId].totalTime / aiStats[aiId].count);
       });
 
-      const totalDuration = aiMessages.reduce((sum, msg) => sum + (msg.metadata?.responseTime || 0), 0);
+      const totalDuration = aiMessages.reduce((sum, msg) => sum + ((msg.metadata?.responseTime as number) || 0), 0);
 
       setDialogueSummary({
         totalDuration,
